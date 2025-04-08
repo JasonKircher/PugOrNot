@@ -1,4 +1,7 @@
-﻿namespace DefaultNamespace;
+﻿using Newtonsoft.Json;
+using RestSharp;
+
+namespace DefaultNamespace;
 
 using System;
 using System.Net.Http;
@@ -19,10 +22,9 @@ public class WarcraftLogsAccess
     public WarcraftLogsAccess()
     {
         Env.Load();
-        Console.WriteLine(Environment.GetEnvironmentVariables());
         clientId = Environment.GetEnvironmentVariable("warcraftlogs_client_id");
         clientSecret = Environment.GetEnvironmentVariable("warcraftlogs_client_secret");
-        Console.WriteLine(clientId);
+        
     }
 
     async public Task<string> GetAccessToken()
@@ -41,29 +43,21 @@ public class WarcraftLogsAccess
         var tokenObj = JObject.Parse(responseBody);
         return tokenObj["access_token"]?.ToString();
     }
-	async public void MakeRequest(string token, Object query)
+	async public void MakeRequest(string token, string query)
 	{
- 		using var client = new HttpClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var content = new StringContent(JObject.FromObject(query).ToString(), Encoding.UTF8, "application/json");
-
-        var response = await client.PostAsync(graphqlUrl, content);
-        var result = await response.Content.ReadAsStringAsync();
-
-        Console.WriteLine(result);
+        var client = new RestClient(graphqlUrl);
+        var request = new RestRequest("", Method.Post);
+        request.AddHeader("Authorization", $"Bearer {token}");
+        request.AddHeader("Content-Type", "application/json");
+        request.AddParameter("application/json", query, ParameterType.RequestBody);
+        Console.WriteLine(JsonConvert.SerializeObject(JsonConvert.DeserializeObject(client.Execute(request).Content), Formatting.Indented));
 	}
-    public void GetEncounterStats(string token, int encounterid, string charname, string region, string server, string metric)
+    public void GetEncounterStats(string token, int encounterId, string charName, string region, string server, string metric)
     {
-		var query = new
-        {
-            query = $@"
-characterData {{
-    character(name: ""{charname}"", serverSlug: ""{server}"", serverRegion: ""{region}"") {{
-        encounterRankings(encounterID: {encounterid}, metric: ""{metric}"")
-    }}
-}}"
-        };
+        var query = string.Format(
+            "{{\"query\":\"query {{\\n  characterData {{\\n    character(name: \\\"{0}\\\", serverSlug: \\\"{1}\\\", serverRegion: \\\"{2}\\\"){{encounterRankings(encounterID: {3}, metric: {4})}}}}}}\"}}",
+            charName, server, region, encounterId, metric
+        );
         MakeRequest(token, query);
     }
 }
